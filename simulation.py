@@ -50,8 +50,9 @@ COP_DEFENCE_PROBABILITY = 0.7
 ATTACK_DEATH_PROBABILITY = 0.1
 # We use this factor to make it non-lineary relation between malevolence and whether they will attack
 # The smaller number, the less likely they will attack (even if they are malevolent)
-ATTACK_EXPONENT_FACTOR=0.15
+ATTACK_EXPONENT_FACTOR=0.22
 DEFENCE_EXPONENT_FACTOR=0.7
+DEFENCE_AGAINST_COP_EXPONENT_FACTOR=0.1
 
 # Miscellanious
 COORDINATE_CHANGE = 5
@@ -137,9 +138,9 @@ def aging(population):
      for person in population:
          person.age += 1
 
-def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_reaction):    
+def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_reaction, depth):    
     total_attacks = 0
-    #print(f"Attacker {attacker.id} {attacker.cop}, {victim.id}, {victim.cop}, {cop_reaction}")
+    #print(f"Attacker {attacker.id} {attacker.cop}, {victim.id}, {victim.cop}, {cop_reaction} Depth: {depth}")
 
     if random.random() < ATTACK_DEATH_PROBABILITY:
         # Victim is deam
@@ -148,8 +149,9 @@ def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_re
             population.remove(victim)
     else:
         # If victim is not dead, they may respond to attack (with higher chance than just randomly attacking somebody)
-        if random.random() ** DEFENCE_EXPONENT_FACTOR < victim.malevolence:
-            total_attacks += attack(population, memorial_list, global_rap_sheet, victim, attacker, False)
+        factor = DEFENCE_AGAINST_COP_EXPONENT_FACTOR if cop_reaction  else DEFENCE_EXPONENT_FACTOR
+        if random.random() ** factor < victim.malevolence:
+            total_attacks += attack(population, memorial_list, global_rap_sheet, victim, attacker, False, depth+1)
 
     # If this is cop reacting to a crime then other cops don't try to react to him
     if not cop_reaction:
@@ -161,7 +163,7 @@ def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_re
                 global_rap_sheet += [RapRecord(attacker.id, victim.id)]
                 # Attack back probabilistically
                 if random.random() < COP_DEFENCE_PROBABILITY:
-                    total_attacks += attack(population, memorial_list, global_rap_sheet, person, attacker, True)
+                    total_attacks += attack(population, memorial_list, global_rap_sheet, person, attacker, True, depth+1)
                 # Only one cop react at a time right now
                 break
 
@@ -177,7 +179,7 @@ def crime_time(population, memorial_list, global_rap_sheet):
             if (len(people_around) == 0):
                 continue
             victim = people_around[int(random.random()*len(people_around))]
-            attacks_committed += attack(population, memorial_list, global_rap_sheet, person, victim, False)
+            attacks_committed += attack(population, memorial_list, global_rap_sheet, person, victim, False,0)
             
     return attacks_committed
 
