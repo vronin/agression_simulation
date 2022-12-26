@@ -4,7 +4,7 @@ import time
 import string
 
 # World setup
-INITIAL_POPULATION_SIZE = 1000
+INITIAL_POPULATION_SIZE = 500
 INITIAL_MALEVALENCE_MEAN = 0.5
 INITIAL_MALEVALENCE_DEVIATION = 0.1
 WORLD_DIMENSION_X = 100
@@ -16,7 +16,7 @@ SIMULATION_STEPS = 150
 
 # Demographics related things
 # I have no idea why, but to ballance real actuary table I had to bump up birth rate pretty high
-BIRTH_RATE = 3 / 100
+BIRTH_RATE = 2.5 / 100
 MAX_AGE = 120
 # Real actuary table (I believe for US, males)
 ACTUARY_TABLE = [ 
@@ -43,10 +43,15 @@ BEHAVIOUR_INFLUENCERS_DISTANCE = 5
 COP_CRIME_DETECTION_DISTANCE = 10
 COP_RETIREMENT_AGE = 50
 COP_PROMOTION_AGE = 21
-COP_PROMOTION_PROBABILITY = 0.07
+COP_PROMOTION_PROBABILITY = 0.01
+COP_DEFENCE_PROBABILITY = 0.7
 
 # Attack related info
 ATTACK_DEATH_PROBABILITY = 0.1
+# We use this factor to make it non-lineary relation between malevolence and whether they will attack
+# The smaller number, the less likely they will attack (even if they are malevolent)
+ATTACK_EXPONENT_FACTOR=0.15
+DEFENCE_EXPONENT_FACTOR=0.7
 
 # Miscellanious
 COORDINATE_CHANGE = 5
@@ -134,6 +139,17 @@ def aging(population):
 
 def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_reaction):    
     total_attacks = 0
+    #print(f"Attacker {attacker.id} {attacker.cop}, {victim.id}, {victim.cop}, {cop_reaction}")
+
+    if random.random() < ATTACK_DEATH_PROBABILITY:
+        # Victim is deam
+        if victim in population:
+            memorial_list += [victim]
+            population.remove(victim)
+    else:
+        # If victim is not dead, they may respond to attack (with higher chance than just randomly attacking somebody)
+        if random.random() ** DEFENCE_EXPONENT_FACTOR < victim.malevolence:
+            total_attacks += attack(population, memorial_list, global_rap_sheet, victim, attacker, False)
 
     # If this is cop reacting to a crime then other cops don't try to react to him
     if not cop_reaction:
@@ -144,25 +160,18 @@ def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_re
                 # Record for sure
                 global_rap_sheet += [RapRecord(attacker.id, victim.id)]
                 # Attack back probabilistically
-                if random.random() > 0.3:
+                if random.random() < COP_DEFENCE_PROBABILITY:
                     total_attacks += attack(population, memorial_list, global_rap_sheet, person, attacker, True)
+                # Only one cop react at a time right now
+                break
 
-    # Victim may respond to attack (with higher chance than just randomly attacking somebody)
-    if random.random() < victim.malevolence:
-        total_attacks += attack(population, memorial_list, global_rap_sheet, victim, attacker, False)
-
-    if random.random() < ATTACK_DEATH_PROBABILITY:
-        # Victim is deam
-        if victim in population:
-            memorial_list += [victim]
-            population.remove(victim)
-
+    
     return total_attacks+1
 
 def crime_time(population, memorial_list, global_rap_sheet):
     attacks_committed = 0
     for person in population:
-        if random.random()**0.15 < person.malevolence:
+        if random.random()**ATTACK_EXPONENT_FACTOR < person.malevolence:
             # Ready to commit a crime
             people_around = people_around_me(population, person, 5)
             if (len(people_around) == 0):
