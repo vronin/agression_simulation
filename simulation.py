@@ -1,12 +1,13 @@
 import random
 import math
+import time
 
 # Constants
-INITIAL_POPULATION_SIZE = 10000
+INITIAL_POPULATION_SIZE = 1000
 SIMULATION_STEPS = 150
 COORDINATE_CHANGE = 5
 # I have no idea why, but to ballance real actuary table I had to bump up birth rate pretty igh
-BIRTH_RATE = 3.8 / 100
+BIRTH_RATE = 4.3 / 100
 MAX_AGE = 120
 WORLD_DIMENSION_X = 100
 WORLD_DIMENSION_Y = 100
@@ -29,14 +30,14 @@ ACTUARY_TABLE = [
 ] 
 
 class Person:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
+    def __init__(self):
+        self.x = random.randint(0, WORLD_DIMENSION_X)
+        self.y = random.randint(0, WORLD_DIMENSION_Y)
         self.age = random.randint(0, MAX_AGE)
         self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.gauss(0.5, 0.1)
 
     def __str__(self):
-        return f"Person: ({self.x}, {self.y}), age {self.age}, malevolence {self.malevolence}"
+        return f"Person: Lives at ({self.x}, {self.y}), age {self.age}, malevolence {self.malevolence}"
 
     def chance_of_death(self):
         return ACTUARY_TABLE[self.age]
@@ -51,19 +52,21 @@ def create_world():
     # Initialize population with random coordinates
     population = []
     for i in range(INITIAL_POPULATION_SIZE):
-        x = random.randint(0, WORLD_DIMENSION_X)
-        y = random.randint(0, WORLD_DIMENSION_Y)
-        population.append(Person(x, y))
+        population.append(Person())
     return population
     
 def births(population):    
     # Add newborn babies to the population. They magically are born at random places
-    population += [Person(random.randint(0, WORLD_DIMENSION_X), random.randint(0, WORLD_DIMENSION_Y)) for _ in range(int(len(population) * BIRTH_RATE))]
+    birth_count = int(len(population) * BIRTH_RATE)
+    population += [Person() for _ in range(birth_count)]
+
+    return birth_count
 
 def deaths(population):
     return [person for person in population if random.random() > person.chance_of_death()]
     
 def coming_of_age(population):
+    coming_of_age_count = 0
     for person in population:
         # Initialize malevolence factor for people who have just turned 15
         if person.age == AGE_OF_COMING_OF_AGE and person.malevolence == 0.0:
@@ -74,6 +77,8 @@ def coming_of_age(population):
             # Initialize malevolence using Gaussian distribution with a mean equal to the calculated average
             # Unfortunately, if people around you are malevolent, you will more likely to be malevolent too.
             person.malevolence = random.gauss(avg_malevolence, 0.1)
+            coming_of_age_count += 1
+    return coming_of_age_count
 
 def moving_around(population):
     for person in population:
@@ -89,16 +94,27 @@ def aging(population):
      for person in population:
          person.age += 1
 
-
 def simulate_world(population):
     # Run simulation for specified number of steps
     for step in range(SIMULATION_STEPS):
-        births(population)
-        population = deaths(population)
-        coming_of_age(population)
+        st = time.time()
+
+        # Birth
+        births_count = births(population)
+
+        # Death
+        population_count = len(population)
+        population = deaths(population)        
+        deaths_count = population_count - len(population)
+
+        # Coming of age
+        coming_of_age_count = coming_of_age(population)
+
+        # Miscellenious 
         moving_around(population)
         aging(population)
-        print(f"--- A {step} year passed... Current population size {len(population)}")
+
+        print(f"G-d's view: A {step} year passed... Births: {births_count}, Deaths: {deaths_count}, Coming of Age: {coming_of_age_count}, Population: {len(population)}")
         
     return population
 
