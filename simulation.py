@@ -1,18 +1,24 @@
 import random
 import math
 import time
+import string
 
-# Constants
+# World setup
 INITIAL_POPULATION_SIZE = 1000
-SIMULATION_STEPS = 150
-COORDINATE_CHANGE = 5
-# I have no idea why, but to ballance real actuary table I had to bump up birth rate pretty igh
-BIRTH_RATE = 4.3 / 100
-MAX_AGE = 120
+INITIAL_MALEVALENCE_MEAN = 0.5
+INITIAL_MALEVALENCE_DEVIATION = 0.1
 WORLD_DIMENSION_X = 100
 WORLD_DIMENSION_Y = 100
-AGE_OF_COMING_OF_AGE = 15
 
+
+# Number of steps to simular
+SIMULATION_STEPS = 150
+
+# Demographics related things
+# I have no idea why, but to ballance real actuary table I had to bump up birth rate pretty high
+BIRTH_RATE = 5 / 100
+MAX_AGE = 120
+# Real actuary table (I believe for US, males)
 ACTUARY_TABLE = [ 
     0.006081, 0.000425, 0.000260, 0.000194, 0.000154, 0.000142, 0.000135, 0.000127, 0.000116, 0.000104, 
     0.000097, 0.000106, 0.000144, 0.000220, 0.000323, 0.000437, 0.000552, 0.000675, 0.000806, 0.000939,
@@ -29,12 +35,36 @@ ACTUARY_TABLE = [
     1
 ] 
 
+# Coming of Age
+AGE_OF_COMING_OF_AGE = 15
+BEHAVIOUR_INFLUENCERS_DISTANCE = 5 
+
+# Cop related info
+COP_CRIME_DETECTION_DISTANCE = 10
+COP_RETIREMENT_AGE = 50
+COP_PROMOTION_AGE = 21
+COP_PROMOTION_PROBABILITY = 0.07
+
+# Attack related info
+ATTACK_DEATH_PROBABILITY = 0.1
+
+# Miscellanious
+COORDINATE_CHANGE = 5
+
+# A record of committed crime
+class RapRecord:
+    def __init__(self, attacker_id, victim_id):
+        self.attacker_id = attacker_id
+        self.victim_if = victim_id
+
 class Person:
     def __init__(self):
+        self.id = ''.join(random.choices(string.ascii_lowercase, k=8))
         self.x = random.randint(0, WORLD_DIMENSION_X)
         self.y = random.randint(0, WORLD_DIMENSION_Y)
         self.age = random.randint(0, MAX_AGE)
-        self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.gauss(0.5, 0.1)
+        self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.gauss(INITIAL_MALEVALENCE_MEAN, INITIAL_MALEVALENCE_DEVIATION)
+        self.cop = False
 
     def __str__(self):
         return f"Person: Lives at ({self.x}, {self.y}), age {self.age}, malevolence {self.malevolence}"
@@ -42,11 +72,9 @@ class Person:
     def chance_of_death(self):
         return ACTUARY_TABLE[self.age]
 
-    def is_near(self, other):
+    def is_near(self, other, distance):
         # Physical distance between people
-        return abs(self.x - other.x) < 5 and abs(self.y - other.y) < 5
-
-
+        return abs(self.x - other.x) < distance and abs(self.y - other.y) < distance
 
 def create_world():    
     # Initialize population with random coordinates
@@ -62,11 +90,17 @@ def births(population):
 
     return birth_count
 
-def deaths(population):
-    return [person for person in population if random.random() > person.chance_of_death()]
+def deaths(population, memorial_list):
+    surviving_population = []
+    for person in population:
+        if random.random() > person.chance_of_death():
+            surviving_population += [person]
+        else:
+            memorial_list += [person]
+    return surviving_population
 
-def people_around_me(population, person):
-    return [other for other in population if person.is_near(other)]
+def people_around_me(population, person, distance):
+    return [other for other in population if person.is_near(other, distance) and person != other]
 
 def coming_of_age(population):
     coming_of_age_count = 0
@@ -74,12 +108,13 @@ def coming_of_age(population):
         # Initialize malevolence factor for people who have just turned 15
         if person.age == AGE_OF_COMING_OF_AGE and person.malevolence == 0.0:
             # Calculate the average malevolence of people nearby. If there are nobody nearby, let's go with random
-            near_people = [other for other in population if person.is_near(other) and other.age >= 15]
-            avg_malevolence = sum(other.malevolence for other in near_people) / len(near_people) if near_people else 0.5
+            people_around = people_around_me(population, person, BEHAVIOUR_INFLUENCERS_DISTANCE)
+            adults_aroung = [other for other in people_around if other.age >= AGE_OF_COMING_OF_AGE]
+            avg_malevolence = sum(other.malevolence for other in adults_aroung) / len(adults_aroung) if adults_aroung else INITIAL_MALEVALENCE_MEAN
 
             # Initialize malevolence using Gaussian distribution with a mean equal to the calculated average
             # Unfortunately, if people around you are malevolent, you will more likely to be malevolent too.
-            person.malevolence = random.gauss(avg_malevolence, 0.1)
+            person.malevolence = random.gauss(avg_malevolence, INITIAL_MALEVALENCE_DEVIATION)
             coming_of_age_count += 1
     return coming_of_age_count
 
@@ -90,21 +125,68 @@ def moving_around(population):
         person.y += random.randint(-COORDINATE_CHANGE, COORDINATE_CHANGE)
 
         # Wrap around coordinate grid
-        person.x %= 100
-        person.y %= 100  
+        person.x %= WORLD_DIMENSION_X
+        person.y %= WORLD_DIMENSION_Y  
         
 def aging(population):
      for person in population:
          person.age += 1
 
-def crime_time(population):
-    crime_commited = 0
-    for person in population:
-        if random.random()**0.2 < person.malevolence:
-            crime_commited += 1
-    return crime_commited
+def attack(population, memorial_list, global_rap_sheet, attacker, victim, cop_reaction):    
+    total_attacks = 0
 
-def simulate_world(population):
+    # If this is cop reacting to a crime then other cops don't try to react to him
+    if not cop_reaction:
+        # If it's not a cop and there is a cop around, it reconds info about the attack and it may counter attack
+        people_around = people_around_me(population, attacker, COP_CRIME_DETECTION_DISTANCE)
+        for person in people_around:
+            if person.cop:
+                # Record for sure
+                global_rap_sheet += [RapRecord(attacker.id, victim.id)]
+                # Attack back probabilistically
+                if random.random() > 0.3:
+                    total_attacks += attack(population, memorial_list, global_rap_sheet, person, attacker, True)
+
+    # Victim may respond to attack (with higher chance than just randomly attacking somebody)
+    if random.random() < victim.malevolence:
+        total_attacks += attack(population, memorial_list, global_rap_sheet, victim, attacker, False)
+
+    if random.random() < ATTACK_DEATH_PROBABILITY:
+        # Victim is deam
+        if victim in population:
+            memorial_list += [victim]
+            population.remove(victim)
+
+    return total_attacks+1
+
+def crime_time(population, memorial_list, global_rap_sheet):
+    attacks_committed = 0
+    for person in population:
+        if random.random()**0.15 < person.malevolence:
+            # Ready to commit a crime
+            people_around = people_around_me(population, person, 5)
+            if (len(people_around) == 0):
+                continue
+            victim = people_around[int(random.random()*len(people_around))]
+            attacks_committed += attack(population, memorial_list, global_rap_sheet, person, victim, False)
+            
+    return attacks_committed
+
+def cop_promotion_demotion(population):
+    total_cops = 0
+    for person in population:
+        if person.cop and person.age > COP_RETIREMENT_AGE:
+            # time to retire
+            person.cop = False
+        if not person.cop and person.age > COP_PROMOTION_AGE and person.age < COP_RETIREMENT_AGE and random.random() < COP_PROMOTION_PROBABILITY:
+            # time to promote a cop
+            person.cop = True
+        if person.cop:
+            total_cops += 1 
+    return total_cops
+
+
+def simulate_world(population, memorial_list, global_rap_sheet):
     # Run simulation for specified number of steps
     for step in range(SIMULATION_STEPS):
         st = time.time()
@@ -114,27 +196,33 @@ def simulate_world(population):
 
         # Death
         population_count = len(population)
-        population = deaths(population)        
+        population = deaths(population, memorial_list)        
         deaths_count = population_count - len(population)
 
         # Coming of age
         coming_of_age_count = coming_of_age(population)
 
         # Crime Time
-        crime_commited = crime_time(population)
+        attacks_committed = crime_time(population, memorial_list, global_rap_sheet)
 
         # Miscellenious 
         moving_around(population)
         aging(population)
+        total_cops = cop_promotion_demotion(population)
 
         print(f"G-d's view: A {step} year passed... ")
         print(f"  Births: {births_count}")
-        print(f"  Deaths: {deaths_count}")
+        print(f"  Natural deaths: {deaths_count}")
         print(f"  Coming of Age: {coming_of_age_count}, Population: {len(population)}")
-        print(f"  Crimes: {crime_commited}")
+        print(f"  Attacks (including self-defence): {attacks_committed}")
+        print(f"  Cops: {total_cops}")
+        print(f"  Global rap sheet: {len(global_rap_sheet)}")
+        print(f"  Memorial list: {len(memorial_list)}")
         
     return population
 
                 
 population = create_world()
-population = simulate_world(population)
+memorial_list = []
+global_rap_sheet = []
+population = simulate_world(population, memorial_list, global_rap_sheet)
