@@ -33,7 +33,7 @@ class Person:
         self.x = x
         self.y = y
         self.age = random.randint(0, MAX_AGE)
-        self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.random()
+        self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.gauss(0.5, 0.1)
 
     def __str__(self):
         return f"Person: ({self.x}, {self.y}), age {self.age}, malevolence {self.malevolence}"
@@ -69,7 +69,7 @@ def coming_of_age(population):
         if person.age == AGE_OF_COMING_OF_AGE and person.malevolence == 0.0:
             # Calculate the average malevolence of people nearby. If there are nobody nearby, let's go with random
             near_people = [other for other in population if person.is_near(other) and other.age >= 15]
-            avg_malevolence = sum(other.malevolence for other in near_people) / len(near_people) if near_people else random.random()
+            avg_malevolence = sum(other.malevolence for other in near_people) / len(near_people) if near_people else 0.5
 
             # Initialize malevolence using Gaussian distribution with a mean equal to the calculated average
             # Unfortunately, if people around you are malevolent, you will more likely to be malevolent too.
