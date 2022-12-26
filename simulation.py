@@ -64,7 +64,10 @@ def births(population):
 
 def deaths(population):
     return [person for person in population if random.random() > person.chance_of_death()]
-    
+
+def people_around_me(population, person):
+    return [other for other in population if person.is_near(other)]
+
 def coming_of_age(population):
     coming_of_age_count = 0
     for person in population:
@@ -94,6 +97,13 @@ def aging(population):
      for person in population:
          person.age += 1
 
+def crime_time(population):
+    crime_commited = 0
+    for person in population:
+        if random.random()**0.2 < person.malevolence:
+            crime_commited += 1
+    return crime_commited
+
 def simulate_world(population):
     # Run simulation for specified number of steps
     for step in range(SIMULATION_STEPS):
@@ -110,11 +120,18 @@ def simulate_world(population):
         # Coming of age
         coming_of_age_count = coming_of_age(population)
 
+        # Crime Time
+        crime_commited = crime_time(population)
+
         # Miscellenious 
         moving_around(population)
         aging(population)
 
-        print(f"G-d's view: A {step} year passed... Births: {births_count}, Deaths: {deaths_count}, Coming of Age: {coming_of_age_count}, Population: {len(population)}")
+        print(f"G-d's view: A {step} year passed... ")
+        print(f"  Births: {births_count}")
+        print(f"  Deaths: {deaths_count}")
+        print(f"  Coming of Age: {coming_of_age_count}, Population: {len(population)}")
+        print(f"  Crimes: {crime_commited}")
         
     return population
 
