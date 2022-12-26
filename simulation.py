@@ -16,7 +16,7 @@ SIMULATION_STEPS = 150
 
 # Demographics related things
 # I have no idea why, but to ballance real actuary table I had to bump up birth rate pretty high
-BIRTH_RATE = 5 / 100
+BIRTH_RATE = 3 / 100
 MAX_AGE = 120
 # Real actuary table (I believe for US, males)
 ACTUARY_TABLE = [ 
@@ -58,11 +58,11 @@ class RapRecord:
         self.victim_if = victim_id
 
 class Person:
-    def __init__(self):
+    def __init__(self, age):
         self.id = ''.join(random.choices(string.ascii_lowercase, k=8))
         self.x = random.randint(0, WORLD_DIMENSION_X)
         self.y = random.randint(0, WORLD_DIMENSION_Y)
-        self.age = random.randint(0, MAX_AGE)
+        self.age = age
         self.malevolence = 0.0 if self.age < AGE_OF_COMING_OF_AGE else random.gauss(INITIAL_MALEVALENCE_MEAN, INITIAL_MALEVALENCE_DEVIATION)
         self.cop = False
 
@@ -80,13 +80,13 @@ def create_world():
     # Initialize population with random coordinates
     population = []
     for i in range(INITIAL_POPULATION_SIZE):
-        population.append(Person())
+        population.append(Person(random.randint(0, MAX_AGE)))
     return population
     
 def births(population):    
     # Add newborn babies to the population. They magically are born at random places
     birth_count = int(len(population) * BIRTH_RATE)
-    population += [Person() for _ in range(birth_count)]
+    population += [Person(0) for _ in range(birth_count)]
 
     return birth_count
 
